@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import difflib
 import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 
 MAX_OUTPUT_CHARS = 6000
+MAX_SNAPSHOT_BYTES = 120_000
 
 
 @dataclass
@@ -21,14 +24,18 @@ class LocalToolbox:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.resolve()
         self.workspace.mkdir(parents=True, exist_ok=True)
+        self.initial_snapshot = self._snapshot_text_files()
 
     def run(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         tools = {
+            "workspace_summary": self.workspace_summary,
             "list_files": self.list_files,
             "read_file": self.read_file,
             "write_file": self.write_file,
             "append_file": self.append_file,
+            "replace_in_file": self.replace_in_file,
             "run_command": self.run_command,
+            "diff_workspace": self.diff_workspace,
         }
         if name not in tools:
             return ToolResult(False, f"Unknown tool: {name}")
@@ -42,11 +49,14 @@ class LocalToolbox:
     def describe(self) -> str:
         return (
             "Available tools:\n"
+            "- workspace_summary(): summarize file count, total bytes, and root path.\n"
             "- list_files(): recursively list files in the workspace.\n"
             "- read_file(path): read a UTF-8 text file.\n"
             "- write_file(path, content): create or replace a UTF-8 text file.\n"
             "- append_file(path, content): append text to a UTF-8 text file.\n"
-            "- run_command(command): run a shell command inside the workspace."
+            "- replace_in_file(path, old, new, expected_replacements=1): replace exact text.\n"
+            "- run_command(command, timeout=30): run a shell command inside the workspace.\n"
+            "- diff_workspace(): show a unified diff against the initial workspace snapshot."
         )
 
     def _resolve(self, path: str) -> Path:
@@ -66,6 +76,23 @@ class LocalToolbox:
                 lines.append(str(rel_path).replace("\\", "/"))
         return ToolResult(True, "\n".join(lines) if lines else "(workspace is empty)")
 
+    def workspace_summary(self) -> ToolResult:
+        file_count = 0
+        total_bytes = 0
+        for root, dirs, files in os.walk(self.workspace):
+            dirs[:] = [directory for directory in dirs if not self._is_ignored_dir(directory)]
+            for file_name in files:
+                path = Path(root) / file_name
+                file_count += 1
+                total_bytes += path.stat().st_size
+        summary = {
+            "workspace": str(self.workspace),
+            "file_count": file_count,
+            "total_bytes": total_bytes,
+            "captured_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        return ToolResult(True, str(summary))
+
     def read_file(self, path: str) -> ToolResult:
         target = self._resolve(path)
         return ToolResult(True, self._truncate(target.read_text(encoding="utf-8")))
@@ -83,7 +110,29 @@ class LocalToolbox:
             file.write(content)
         return ToolResult(True, f"Appended {len(content)} chars to {path}.")
 
-    def run_command(self, command: str) -> ToolResult:
+    def replace_in_file(
+        self,
+        path: str,
+        old: str,
+        new: str,
+        expected_replacements: int = 1,
+    ) -> ToolResult:
+        target = self._resolve(path)
+        content = target.read_text(encoding="utf-8")
+        count = content.count(old)
+        if count != expected_replacements:
+            return ToolResult(
+                False,
+                (
+                    f"Expected {expected_replacements} occurrence(s) in {path}, "
+                    f"but found {count}. No changes were made."
+                ),
+            )
+        updated = content.replace(old, new, expected_replacements)
+        target.write_text(updated, encoding="utf-8", newline="\n")
+        return ToolResult(True, f"Replaced {count} occurrence(s) in {path}.")
+
+    def run_command(self, command: str, timeout: int = 30) -> ToolResult:
         command_to_run = self._normalize_python_command(command)
         completed = subprocess.run(
             command_to_run,
@@ -91,7 +140,7 @@ class LocalToolbox:
             shell=True,
             text=True,
             capture_output=True,
-            timeout=30,
+            timeout=timeout,
         )
         output = (
             f"exit_code={completed.returncode}\n"
@@ -99,6 +148,47 @@ class LocalToolbox:
             f"stderr:\n{completed.stderr}"
         )
         return ToolResult(completed.returncode == 0, self._truncate(output))
+
+    def diff_workspace(self) -> ToolResult:
+        current = self._snapshot_text_files()
+        paths = sorted(set(self.initial_snapshot) | set(current))
+        chunks: list[str] = []
+        for path in paths:
+            before = self.initial_snapshot.get(path, "")
+            after = current.get(path, "")
+            if before == after:
+                continue
+            chunks.extend(
+                difflib.unified_diff(
+                    before.splitlines(),
+                    after.splitlines(),
+                    fromfile=f"before/{path}",
+                    tofile=f"after/{path}",
+                    lineterm="",
+                )
+            )
+        if not chunks:
+            return ToolResult(True, "(no workspace changes)")
+        return ToolResult(True, self._truncate("\n".join(chunks)))
+
+    def _snapshot_text_files(self) -> dict[str, str]:
+        snapshot: dict[str, str] = {}
+        for root, dirs, files in os.walk(self.workspace):
+            dirs[:] = [directory for directory in dirs if not self._is_ignored_dir(directory)]
+            for file_name in files:
+                path = Path(root) / file_name
+                if path.stat().st_size > MAX_SNAPSHOT_BYTES:
+                    continue
+                rel_path = str(path.relative_to(self.workspace)).replace("\\", "/")
+                try:
+                    snapshot[rel_path] = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+        return snapshot
+
+    @staticmethod
+    def _is_ignored_dir(directory: str) -> bool:
+        return directory in {".git", "__pycache__", ".pytest_cache", ".venv", "venv", ".agent_runs"}
 
     @staticmethod
     def _normalize_python_command(command: str) -> str:

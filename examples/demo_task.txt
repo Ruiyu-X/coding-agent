@@ -1,1 +1,1 @@
-Fix the calculator implementation in demo_workspace and verify the tests.
+Fix the calculator implementation, add a safe divide function, extend tests, and verify everything.

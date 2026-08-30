@@ -27,6 +27,39 @@ class LocalToolboxTests(unittest.TestCase):
             self.assertFalse(result.ok)
             self.assertIn("escapes workspace", result.output)
 
+    def test_replace_in_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            toolbox = LocalToolbox(Path(tmp))
+            toolbox.write_file("app.py", "value = 1\n")
+
+            result = toolbox.replace_in_file("app.py", "value = 1", "value = 2")
+
+            self.assertTrue(result.ok)
+            self.assertEqual(toolbox.read_file("app.py").output, "value = 2\n")
+
+    def test_replace_in_file_rejects_unexpected_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            toolbox = LocalToolbox(Path(tmp))
+            toolbox.write_file("app.py", "value = 1\nvalue = 1\n")
+
+            result = toolbox.replace_in_file("app.py", "value = 1", "value = 2")
+
+            self.assertFalse(result.ok)
+            self.assertEqual(toolbox.read_file("app.py").output, "value = 1\nvalue = 1\n")
+
+    def test_diff_workspace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "app.py").write_text("value = 1\n", encoding="utf-8")
+            toolbox = LocalToolbox(root)
+
+            toolbox.write_file("app.py", "value = 2\n")
+            result = toolbox.diff_workspace()
+
+            self.assertTrue(result.ok)
+            self.assertIn("-value = 1", result.output)
+            self.assertIn("+value = 2", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

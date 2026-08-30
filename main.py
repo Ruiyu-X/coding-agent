@@ -29,6 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use a deterministic mock model for demos and tests.",
     )
+    parser.add_argument(
+        "--transcript",
+        default=".agent_runs/last-run.json",
+        help="Path for the JSON run transcript. Use 'none' to disable.",
+    )
     return parser
 
 
@@ -37,7 +42,13 @@ def main() -> int:
     workspace = Path(args.workspace).resolve()
     toolbox = LocalToolbox(workspace)
     model = MockModelClient() if args.mock else OpenAICompatibleClient.from_env()
-    agent = CodingAgent(model=model, toolbox=toolbox, max_steps=args.max_steps)
+    transcript_path = None if args.transcript.lower() == "none" else Path(args.transcript)
+    agent = CodingAgent(
+        model=model,
+        toolbox=toolbox,
+        max_steps=args.max_steps,
+        transcript_path=transcript_path,
+    )
 
     final_answer = agent.run(args.task)
     print("\n=== Final Answer ===")

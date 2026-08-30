@@ -75,23 +75,31 @@ class MockModelClient:
         if self.step == 1:
             return json.dumps(
                 {
-                    "thought": "Inspect the workspace before editing.",
-                    "tool": "list_files",
+                    "thought": "Summarize the workspace before choosing files.",
+                    "tool": "workspace_summary",
                     "arguments": {},
                 }
             )
         if self.step == 2:
             return json.dumps(
                 {
-                    "thought": "Read the calculator implementation.",
-                    "tool": "read_file",
-                    "arguments": {"path": "calculator.py"},
+                    "thought": "List project files to find code and tests.",
+                    "tool": "list_files",
+                    "arguments": {},
                 }
             )
         if self.step == 3:
             return json.dumps(
                 {
-                    "thought": "Fix the arithmetic functions and keep the API stable.",
+                    "thought": "Read the calculator implementation before editing.",
+                    "tool": "read_file",
+                    "arguments": {"path": "calculator.py"},
+                }
+            )
+        if self.step == 4:
+            return json.dumps(
+                {
+                    "thought": "Fix add/subtract and add a guarded divide function.",
                     "tool": "write_file",
                     "arguments": {
                         "path": "calculator.py",
@@ -100,21 +108,80 @@ class MockModelClient:
                             "    return a + b\n\n\n"
                             "def subtract(a, b):\n"
                             "    return a - b\n"
+                            "\n\n"
+                            "def divide(a, b):\n"
+                            "    if b == 0:\n"
+                            "        raise ValueError(\"division by zero\")\n"
+                            "    return a / b\n"
                         ),
                     },
                 }
             )
-        if self.step == 4:
+        if self.step == 5:
+            return json.dumps(
+                {
+                    "thought": "Read the tests so the new behavior can be verified.",
+                    "tool": "read_file",
+                    "arguments": {"path": "test_calculator.py"},
+                }
+            )
+        if self.step == 6:
+            return json.dumps(
+                {
+                    "thought": "Extend tests for divide and zero-division handling.",
+                    "tool": "replace_in_file",
+                    "arguments": {
+                        "path": "test_calculator.py",
+                        "old": "from calculator import add, subtract",
+                        "new": "from calculator import add, divide, subtract",
+                    },
+                }
+            )
+        if self.step == 7:
+            return json.dumps(
+                {
+                    "thought": "Add focused unit tests for the new divide function.",
+                    "tool": "replace_in_file",
+                    "arguments": {
+                        "path": "test_calculator.py",
+                        "old": (
+                            "    def test_subtract(self):\n"
+                            "        self.assertEqual(subtract(7, 4), 3)\n"
+                        ),
+                        "new": (
+                            "    def test_subtract(self):\n"
+                            "        self.assertEqual(subtract(7, 4), 3)\n\n"
+                            "    def test_divide(self):\n"
+                            "        self.assertEqual(divide(8, 2), 4)\n\n"
+                            "    def test_divide_by_zero(self):\n"
+                            "        with self.assertRaises(ValueError):\n"
+                            "            divide(8, 0)\n"
+                        ),
+                    },
+                }
+            )
+        if self.step == 8:
             return json.dumps(
                 {
                     "thought": "Run the project tests to verify the change.",
                     "tool": "run_command",
-                    "arguments": {"command": "python -m unittest discover -s ."},
+                    "arguments": {"command": "python -m unittest discover -s .", "timeout": 30},
+                }
+            )
+        if self.step == 9:
+            return json.dumps(
+                {
+                    "thought": "Review the final code changes before reporting success.",
+                    "tool": "diff_workspace",
+                    "arguments": {},
                 }
             )
         return json.dumps(
             {
-                "thought": "The tests pass, so the task is complete.",
-                "final": "Fixed calculator.py and verified it with unittest.",
+                "thought": "The tests pass and the diff matches the requested task.",
+                "final": (
+                    "Fixed calculator arithmetic, added divide with zero-division "
+                    "handling, extended tests, and verified everything with unittest."
+                ),
             }
         )
