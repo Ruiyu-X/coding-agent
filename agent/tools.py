@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ class LocalToolbox:
             "append_file": self.append_file,
             "replace_in_file": self.replace_in_file,
             "run_command": self.run_command,
+            "discover_python_tests": self.discover_python_tests,
             "diff_workspace": self.diff_workspace,
         }
         if name not in tools:
@@ -56,6 +58,8 @@ class LocalToolbox:
             "- append_file(path, content): append text to a UTF-8 text file.\n"
             "- replace_in_file(path, old, new, expected_replacements=1): replace exact text.\n"
             "- run_command(command, timeout=30): run a shell command inside the workspace.\n"
+            "- discover_python_tests(start_dir='.', pattern='test*.py', expected_tests=[]): "
+            "run unittest discovery in verbose mode and verify expected test names appear.\n"
             "- diff_workspace(): show a unified diff against the initial workspace snapshot."
         )
 
@@ -149,6 +153,47 @@ class LocalToolbox:
         )
         return ToolResult(completed.returncode == 0, self._truncate(output))
 
+    def discover_python_tests(
+        self,
+        start_dir: str = ".",
+        pattern: str = "test*.py",
+        expected_tests: list[str] | None = None,
+        timeout: int = 30,
+    ) -> ToolResult:
+        start_path = self._resolve(start_dir)
+        if not start_path.is_dir():
+            return ToolResult(False, f"Test start directory does not exist: {start_dir}")
+
+        command = (
+            f'"{sys.executable}" -m unittest discover '
+            f'-s "{start_path}" -p "{pattern}" -v'
+        )
+        completed = subprocess.run(
+            command,
+            cwd=self.workspace,
+            shell=True,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+        combined = completed.stdout + "\n" + completed.stderr
+        discovered = self._parse_unittest_names(combined)
+        expected = expected_tests or []
+        missing = [
+            test_name
+            for test_name in expected
+            if not any(test_name in discovered_name for discovered_name in discovered)
+        ]
+        output = (
+            f"exit_code={completed.returncode}\n"
+            f"discovered_count={len(discovered)}\n"
+            f"discovered_tests={discovered}\n"
+            f"missing_expected_tests={missing}\n"
+            f"stdout:\n{completed.stdout}\n"
+            f"stderr:\n{completed.stderr}"
+        )
+        return ToolResult(completed.returncode == 0 and not missing, self._truncate(output))
+
     def diff_workspace(self) -> ToolResult:
         current = self._snapshot_text_files()
         paths = sorted(set(self.initial_snapshot) | set(current))
@@ -189,6 +234,15 @@ class LocalToolbox:
     @staticmethod
     def _is_ignored_dir(directory: str) -> bool:
         return directory in {".git", "__pycache__", ".pytest_cache", ".venv", "venv", ".agent_runs"}
+
+    @staticmethod
+    def _parse_unittest_names(output: str) -> list[str]:
+        names: list[str] = []
+        for line in output.splitlines():
+            match = re.match(r"^(test[\w_]+)\s+\(([^)]+)\)\s+\.\.\.", line.strip())
+            if match:
+                names.append(match.group(2))
+        return names
 
     @staticmethod
     def _normalize_python_command(command: str) -> str:

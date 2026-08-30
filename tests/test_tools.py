@@ -60,6 +60,50 @@ class LocalToolboxTests(unittest.TestCase):
             self.assertIn("-value = 1", result.output)
             self.assertIn("+value = 2", result.output)
 
+    def test_discover_python_tests_reports_missing_expected_test(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "test_sample.py").write_text(
+                (
+                    "import unittest\n\n"
+                    "class SampleTests(unittest.TestCase):\n"
+                    "    def test_existing(self):\n"
+                    "        self.assertTrue(True)\n\n"
+                    "if __name__ == '__main__':\n"
+                    "    unittest.main()\n\n"
+                    "    def test_power(self):\n"
+                    "        self.assertTrue(True)\n"
+                ),
+                encoding="utf-8",
+            )
+            toolbox = LocalToolbox(root)
+
+            result = toolbox.discover_python_tests(expected_tests=["test_power"])
+
+            self.assertFalse(result.ok)
+            self.assertIn("discovered_count=1", result.output)
+            self.assertIn("missing_expected_tests=['test_power']", result.output)
+
+    def test_discover_python_tests_accepts_expected_test(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "test_sample.py").write_text(
+                (
+                    "import unittest\n\n"
+                    "class SampleTests(unittest.TestCase):\n"
+                    "    def test_power(self):\n"
+                    "        self.assertTrue(True)\n"
+                ),
+                encoding="utf-8",
+            )
+            toolbox = LocalToolbox(root)
+
+            result = toolbox.discover_python_tests(expected_tests=["test_power"])
+
+            self.assertTrue(result.ok)
+            self.assertIn("discovered_count=1", result.output)
+            self.assertIn("test_sample.SampleTests.test_power", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

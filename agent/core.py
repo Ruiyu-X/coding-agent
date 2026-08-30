@@ -32,6 +32,9 @@ Important rules:
   functions.
 - If tests or commands fail, inspect the failing file and continue fixing until
   the tests pass or max_steps is reached.
+- After adding tests, prefer discover_python_tests with expected_tests so you
+  can verify the new tests were actually discovered, not merely that old tests
+  still pass.
 - Use diff_workspace before finalizing if you changed files.
 """
 

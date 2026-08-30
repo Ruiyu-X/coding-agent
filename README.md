@@ -18,6 +18,8 @@ OpenAI Agents SDK, or Claude Agent SDK.
 - Workspace path guard to prevent file access outside the selected workspace.
 - Focused edit support through `replace_in_file`, which rejects ambiguous
   replacements.
+- Test discovery checks through `discover_python_tests`, which verifies expected
+  test names were actually collected by `unittest`.
 - Unified diff review against the initial workspace snapshot.
 - JSON transcript for every run, including decisions, tool arguments, and
   observations.
@@ -96,6 +98,8 @@ The important implementation points are:
 - Termination is controlled by either a `final` JSON field or `max_steps`.
 - Error handling routes invalid tools, invalid arguments, failed commands, and
   path escapes back as observations instead of crashing the whole loop.
+- Test verification can check both command success and whether newly added tests
+  were discovered.
 - API keys are read only from environment variables in `agent/model_client.py`.
 
 ## Troubleshooting

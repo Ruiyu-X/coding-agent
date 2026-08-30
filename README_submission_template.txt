@@ -14,9 +14,10 @@ This project implements a compact coding agent without using agent frameworks
 or hosted code/file tools. It manages its own conversation history, parses model
 JSON actions, executes local tools, reads and writes files inside a guarded
 workspace, performs focused text replacement, runs shell commands, records a
-JSON transcript, reviews workspace diffs, observes errors, and iterates until it
-reaches a final answer or a step limit. A mock model is included for
-deterministic demonstration and tests.
+JSON transcript, verifies unittest discovery for newly added tests, reviews
+workspace diffs, observes errors, and iterates until it reaches a final answer
+or a step limit. A mock model is included for deterministic demonstration and
+tests.
 
 Notes:
 API keys must be provided through environment variables and must not be committed
