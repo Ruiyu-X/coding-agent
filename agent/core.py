@@ -25,6 +25,13 @@ Important rules:
 - Start by understanding the workspace before editing.
 - Prefer small, verifiable edits and run tests when possible.
 - Use replace_in_file for focused edits when the original text is known.
+- Do not use broad repeated replacements unless every occurrence has the same
+  intended meaning. If unsure, rewrite the small file or replace a larger
+  unique block instead.
+- When adding tests, keep them inside the test class and update imports for new
+  functions.
+- If tests or commands fail, inspect the failing file and continue fixing until
+  the tests pass or max_steps is reached.
 - Use diff_workspace before finalizing if you changed files.
 """
 
@@ -41,7 +48,7 @@ class CodingAgent:
         self,
         model: ChatModel,
         toolbox: LocalToolbox,
-        max_steps: int = 12,
+        max_steps: int = 20,
         transcript_path: Path | None = None,
     ) -> None:
         self.model = model

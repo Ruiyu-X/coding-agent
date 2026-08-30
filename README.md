@@ -47,6 +47,13 @@ python -m unittest discover -s tests
 
 On Windows, use `py` instead of `python` if `python` is not in PATH.
 
+For real model runs, use a larger step budget when the task includes both code
+changes and tests:
+
+```bash
+python main.py "Add a power(a, b) function to the calculator, add tests, and verify all tests pass." --workspace demo_workspace --max-steps 20
+```
+
 ## Run With A Real Model
 
 Set environment variables:
@@ -90,6 +97,13 @@ The important implementation points are:
 - Error handling routes invalid tools, invalid arguments, failed commands, and
   path escapes back as observations instead of crashing the whole loop.
 - API keys are read only from environment variables in `agent/model_client.py`.
+
+## Troubleshooting
+
+Real models can make imperfect tool decisions. If a run stops at `max_steps`,
+inspect `.agent_runs/last-run.json`, restore the demo workspace if needed, and
+rerun with a larger step budget or a more specific task. For reproducible
+screen recordings, use `--mock`.
 
 ## Run Transcript
 
