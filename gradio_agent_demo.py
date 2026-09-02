@@ -5,6 +5,9 @@ import contextlib
 import io
 import json
 import os
+import queue
+import threading
+import time
 from pathlib import Path
 
 import gradio as gr
@@ -48,10 +51,10 @@ if __name__ == "__main__":
 
 APP_CSS = """
 :root {
-    --agent-bg: #0b1020;
-    --agent-panel: #111827;
-    --agent-panel-soft: #172033;
-    --agent-line: rgba(148, 163, 184, 0.22);
+    --agent-bg: #070b16;
+    --agent-panel: rgba(15, 23, 42, 0.78);
+    --agent-panel-soft: rgba(30, 41, 59, 0.78);
+    --agent-line: rgba(148, 163, 184, 0.20);
     --agent-text: #e5edf7;
     --agent-muted: #9aa8bc;
     --agent-blue: #3b82f6;
@@ -61,7 +64,12 @@ APP_CSS = """
 }
 
 .gradio-container {
-    background: linear-gradient(135deg, #0b1020 0%, #111827 56%, #152033 100%) !important;
+    background:
+        linear-gradient(180deg, rgba(96, 165, 250, 0.18) 0%, rgba(96, 165, 250, 0.04) 18%, transparent 38%),
+        radial-gradient(circle at 50% -18%, rgba(125, 211, 252, 0.34), transparent 34%),
+        radial-gradient(circle at 9% 8%, rgba(59, 130, 246, 0.20), transparent 25%),
+        radial-gradient(circle at 92% 10%, rgba(16, 185, 129, 0.14), transparent 26%),
+        linear-gradient(135deg, #070b16 0%, #0f172a 46%, #111827 100%) !important;
     color: var(--agent-text) !important;
     font-family: var(--agent-font) !important;
 }
@@ -71,15 +79,30 @@ APP_CSS = """
 }
 
 .main-wrap {
-    max-width: 1380px;
+    max-width: 1480px;
     margin: 0 auto;
 }
 
 .hero {
-    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    padding: 22px 26px;
     border: 1px solid var(--agent-line);
     border-radius: 8px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(17, 24, 39, 0.96));
+    background:
+        linear-gradient(90deg, rgba(125, 211, 252, 0.14), transparent 48%),
+        linear-gradient(135deg, rgba(59, 130, 246, 0.20), rgba(17, 24, 39, 0.88));
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(191, 219, 254, 0.86), transparent);
 }
 
 .hero-title {
@@ -111,11 +134,27 @@ APP_CSS = """
     font-size: 12px;
 }
 
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(360px, 0.86fr) minmax(520px, 1.14fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.file-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+}
+
 .panel {
     border: 1px solid var(--agent-line) !important;
     border-radius: 8px !important;
-    background: rgba(17, 24, 39, 0.94) !important;
-    padding: 14px !important;
+    background:
+        linear-gradient(180deg, rgba(30, 41, 59, 0.62), rgba(15, 23, 42, 0.86)),
+        var(--agent-panel) !important;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.24);
+    padding: 16px !important;
 }
 
 .section-title {
@@ -133,6 +172,39 @@ button.primary {
     min-height: 44px !important;
     border-radius: 8px !important;
     font-weight: 800 !important;
+}
+
+.run-state {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.state-tile {
+    min-height: 70px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.state-value {
+    color: #eff6ff;
+    font-size: 18px;
+    font-weight: 850;
+}
+
+.state-label {
+    margin-top: 4px;
+    color: var(--agent-muted);
+    font-size: 12px;
+}
+
+@media (max-width: 980px) {
+    .dashboard-grid, .file-grid {
+        grid-template-columns: 1fr;
+    }
 }
 """
 
@@ -159,34 +231,95 @@ def read_workspace_files(workspace: str) -> tuple[str, str]:
     )
 
 
-def run_agent(
+class QueueWriter(io.StringIO):
+    def __init__(self, updates: "queue.Queue[str]") -> None:
+        super().__init__()
+        self.updates = updates
+        self.pending = ""
+
+    def write(self, text: str) -> int:
+        self.pending += text
+        while "\n" in self.pending:
+            line, self.pending = self.pending.split("\n", 1)
+            self.updates.put(line + "\n")
+        return len(text)
+
+    def flush(self) -> None:
+        if self.pending:
+            self.updates.put(self.pending)
+            self.pending = ""
+
+
+def run_agent_stream(
     task: str,
     workspace: str,
     max_steps: int,
     use_mock: bool,
     save_transcript: bool,
-) -> tuple[str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str]:
     transcript_path = Path(".agent_runs/gradio-last-run.json") if save_transcript else None
-    model = MockModelClient() if use_mock else OpenAICompatibleClient.from_env()
-    toolbox = LocalToolbox(Path(workspace).resolve())
-    agent = CodingAgent(
-        model=model,
-        toolbox=toolbox,
-        max_steps=int(max_steps),
-        transcript_path=transcript_path,
-    )
+    updates: queue.Queue[str | tuple[str, str | None]] = queue.Queue()
+    log = "Starting agent...\n"
+    final_answer = ""
+    calculator, tests = read_workspace_files(workspace)
+    yield "Running", "0", final_answer, log, "", calculator, tests
 
-    buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
-        final_answer = agent.run(task)
+    def worker() -> None:
+        try:
+            model = MockModelClient() if use_mock else OpenAICompatibleClient.from_env()
+            toolbox = LocalToolbox(Path(workspace).resolve())
+            agent = CodingAgent(
+                model=model,
+                toolbox=toolbox,
+                max_steps=int(max_steps),
+                transcript_path=transcript_path,
+            )
+            writer = QueueWriter(updates)  # type: ignore[arg-type]
+            with contextlib.redirect_stdout(writer):
+                answer = agent.run(task)
+            writer.flush()
+            updates.put(("done", answer))
+        except Exception as exc:
+            updates.put(("error", f"{type(exc).__name__}: {exc}"))
 
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    step_count = 0
     transcript = ""
+    while True:
+        try:
+            item = updates.get(timeout=0.12)
+        except queue.Empty:
+            if thread.is_alive():
+                continue
+            break
+
+        if isinstance(item, tuple):
+            status, payload = item
+            if status == "done":
+                final_answer = payload or ""
+                log += "\n=== Final Answer ===\n" + final_answer + "\n"
+                break
+            final_answer = payload or ""
+            log += "\n[frontend error] " + final_answer + "\n"
+            break
+
+        log += item
+        if item.startswith("[step "):
+            step_count += 1
+        if item.startswith("[observation]") or item.startswith("[step "):
+            calculator, tests = read_workspace_files(workspace)
+            yield "Running", str(step_count), final_answer, log, transcript, calculator, tests
+        time.sleep(0.05)
+
     if transcript_path and transcript_path.exists():
         data = json.loads(transcript_path.read_text(encoding="utf-8"))
         transcript = json.dumps(data, ensure_ascii=False, indent=2)
 
     calculator, tests = read_workspace_files(workspace)
-    return final_answer, buffer.getvalue(), transcript, calculator, tests
+    state = "Completed" if final_answer and not final_answer.startswith(("RuntimeError", "ValueError")) else "Stopped"
+    yield state, str(step_count), final_answer, log, transcript, calculator, tests
 
 
 def build_demo(default_workspace: str) -> gr.Blocks:
@@ -197,10 +330,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
             """
             <div class="main-wrap hero">
               <h1 class="hero-title">Coding Agent Runtime</h1>
-              <div class="hero-subtitle">
-                A self-managed programming agent that calls a language model,
-                executes local tools, verifies tests, and records each run.
-              </div>
+              <div class="hero-subtitle">Self-managed loop for local code reading, editing, command execution, verification, and audit.</div>
               <div class="tag-row">
                 <span class="tag">JSON tool actions</span>
                 <span class="tag">Local file editing</span>
@@ -213,7 +343,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
             """
         )
 
-        with gr.Row(elem_classes=["main-wrap"]):
+        with gr.Row(elem_classes=["main-wrap", "dashboard-grid"]):
             with gr.Column(scale=1, elem_classes=["panel"]):
                 gr.HTML("<div class='section-title'>Task Control</div>")
                 task = gr.Textbox(value=DEFAULT_TASK, lines=4, label="Programming task")
@@ -228,10 +358,13 @@ def build_demo(default_workspace: str) -> gr.Blocks:
 
             with gr.Column(scale=1, elem_classes=["panel"]):
                 gr.HTML("<div class='section-title'>Run Result</div>")
+                with gr.Row():
+                    run_state = gr.Textbox(value="Idle", label="State", interactive=False)
+                    step_count = gr.Textbox(value="0", label="Observed steps", interactive=False)
                 final_answer = gr.Textbox(label="Final answer", lines=3)
                 run_log = gr.Textbox(label="Agent log", lines=20)
 
-        with gr.Row(elem_classes=["main-wrap"]):
+        with gr.Row(elem_classes=["main-wrap", "file-grid"]):
             with gr.Column(elem_classes=["panel"]):
                 gr.HTML("<div class='section-title'>Workspace Files</div>")
                 calculator_view = gr.Code(language="python", label="calculator.py")
@@ -246,9 +379,9 @@ def build_demo(default_workspace: str) -> gr.Blocks:
             outputs=[reset_status, calculator_view, tests_view],
         )
         run_btn.click(
-            fn=run_agent,
+            fn=run_agent_stream,
             inputs=[task, workspace, max_steps, use_mock, save_transcript],
-            outputs=[final_answer, run_log, transcript, calculator_view, tests_view],
+            outputs=[run_state, step_count, final_answer, run_log, transcript, calculator_view, tests_view],
         )
 
     return demo

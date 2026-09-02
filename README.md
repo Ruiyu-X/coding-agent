@@ -148,4 +148,5 @@ reporting completion.
 `gradio_agent_demo.py` provides a small web interface for demonstrations. It is
 only a UI wrapper around the same `CodingAgent` runtime. The frontend can reset
 the demo workspace, run the agent in mock or real-model mode, show the run log,
-display the final files, and inspect the JSON transcript.
+stream each step as it happens, display the final files, and inspect the JSON
+transcript.

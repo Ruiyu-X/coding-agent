@@ -19,7 +19,7 @@ Keep the recording under two minutes.
 
 6. Show the final `OK` test result and `diff_workspace` output.
 7. If using the optional Gradio frontend, show that it calls the same backend
-   agent and displays the run log, final files, and transcript.
+   agent and streams the step-by-step run log, final files, and transcript.
 8. Mention that real model mode uses `OPENAI_API_KEY` from the environment and
    that credentials are never stored in the repository.
 
