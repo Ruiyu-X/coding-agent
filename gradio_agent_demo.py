@@ -176,7 +176,7 @@ APP_CSS = """
 .file-panel {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 690px;
+    min-height: 588px;
 }
 
 .log-box {
@@ -207,8 +207,8 @@ APP_CSS = """
 
 .code-stack {
     display: grid;
-    grid-template-rows: 260px 360px;
-    gap: 18px;
+    grid-template-rows: 210px 310px;
+    gap: 14px;
 }
 
 .code-stack > div {
@@ -242,10 +242,10 @@ APP_CSS = """
 }
 
 .code-lines {
-    margin: 10px 0 12px;
+    margin: 8px 0 10px;
     height: calc(100% - 46px);
     overflow: hidden;
-    font: 13px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
+    font: 12px/1.35 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
 
 .code-row {
@@ -267,7 +267,7 @@ APP_CSS = """
 }
 
 .transcript-card {
-    height: 638px;
+    height: 534px;
     overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
@@ -366,7 +366,7 @@ def log_html(log: str) -> str:
     return f"<div class='log-box'><pre>{escaped}</pre></div>"
 
 
-def code_html(title: str, code: str, max_lines: int = 18) -> str:
+def code_html(title: str, code: str, max_lines: int = 12) -> str:
     rows = []
     lines = code.splitlines() or [""]
     visible_lines = lines[:max_lines]
