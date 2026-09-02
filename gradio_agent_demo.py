@@ -170,18 +170,18 @@ APP_CSS = """
 }
 
 .control-panel, .result-panel {
-    min-height: 610px;
+    min-height: 650px;
 }
 
 .file-panel {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 828px;
+    min-height: 900px;
 }
 
 .log-box {
-    height: 470px;
-    overflow: hidden;
+    height: 360px;
+    overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 8px;
     background: rgba(15, 23, 42, 0.42);
@@ -189,13 +189,10 @@ APP_CSS = """
 }
 
 .log-box pre {
-    height: 100%;
+    min-height: 100%;
     margin: 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
     color: #eff6ff;
     font: 13px/1.48 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
@@ -206,8 +203,8 @@ APP_CSS = """
 
 .code-stack {
     display: grid;
-    grid-template-rows: 240px 520px;
-    gap: 16px;
+    grid-template-rows: 310px 520px;
+    gap: 18px;
 }
 
 .code-card {
@@ -259,7 +256,7 @@ APP_CSS = """
 }
 
 .transcript-card {
-    height: 776px;
+    height: 848px;
     overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
