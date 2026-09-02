@@ -153,6 +153,7 @@ APP_CSS = """
 }
 
 .panel {
+    box-sizing: border-box;
     height: 100%;
     border: 1px solid var(--agent-line) !important;
     border-radius: 8px !important;
@@ -163,16 +164,21 @@ APP_CSS = """
     padding: 16px !important;
 }
 
+.control-panel {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .control-panel, .result-panel {
-    min-height: 760px;
+    min-height: 690px;
 }
 
 .file-panel {
-    min-height: 760px;
+    min-height: 720px;
 }
 
 .log-box {
-    height: 520px;
+    height: 470px;
     overflow: hidden;
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 8px;
@@ -196,19 +202,36 @@ APP_CSS = """
     color: var(--agent-muted);
 }
 
-.tall-code textarea,
-.tall-code .cm-editor,
-.tall-code .cm-scroller {
-    min-height: 300px !important;
-    max-height: 300px !important;
-    overflow: auto !important;
+.control-spacer {
+    flex: 1 1 auto;
+    min-height: 14px;
+}
+
+.status-box textarea {
+    min-height: 74px !important;
+}
+
+.code-stack {
+    display: grid;
+    grid-template-rows: auto auto;
+    gap: 16px;
+}
+
+.code-natural textarea,
+.code-natural .cm-editor {
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+.code-natural .cm-scroller {
+    overflow: visible !important;
 }
 
 .transcript-code textarea,
 .transcript-code .cm-editor,
 .transcript-code .cm-scroller {
-    min-height: 668px !important;
-    max-height: 668px !important;
+    min-height: 628px !important;
+    max-height: 628px !important;
     overflow: auto !important;
 }
 
@@ -422,7 +445,12 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                 with gr.Row():
                     reset_btn = gr.Button("Reset demo workspace", variant="secondary")
                     run_btn = gr.Button("Run agent", variant="primary")
-                reset_status = gr.Textbox(label="Workspace status", interactive=False)
+                gr.HTML("<div class='control-spacer'></div>")
+                reset_status = gr.Textbox(
+                    label="Workspace status",
+                    interactive=False,
+                    elem_classes=["status-box"],
+                )
 
             with gr.Column(scale=1, elem_classes=["panel", "result-panel"]):
                 gr.HTML("<div class='section-title'>Run Result</div>")
@@ -436,8 +464,17 @@ def build_demo(default_workspace: str) -> gr.Blocks:
         with gr.Row(elem_classes=["main-wrap", "file-grid"]):
             with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Workspace Files</div>")
-                calculator_view = gr.Code(language="python", label="calculator.py", elem_classes=["tall-code"])
-                tests_view = gr.Code(language="python", label="test_calculator.py", elem_classes=["tall-code"])
+                with gr.Column(elem_classes=["code-stack"]):
+                    calculator_view = gr.Code(
+                        language="python",
+                        label="calculator.py",
+                        elem_classes=["code-natural"],
+                    )
+                    tests_view = gr.Code(
+                        language="python",
+                        label="test_calculator.py",
+                        elem_classes=["code-natural"],
+                    )
             with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Run Transcript</div>")
                 transcript = gr.Code(language="json", label=".agent_runs/gradio-last-run.json", elem_classes=["transcript-code"])
