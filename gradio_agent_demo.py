@@ -176,7 +176,7 @@ APP_CSS = """
 .file-panel {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 730px;
+    min-height: 690px;
 }
 
 .log-box {
@@ -207,8 +207,13 @@ APP_CSS = """
 
 .code-stack {
     display: grid;
-    grid-template-rows: 230px 430px;
+    grid-template-rows: 260px 360px;
     gap: 18px;
+}
+
+.code-stack > div {
+    height: 100%;
+    overflow: hidden;
 }
 
 .code-card {
@@ -238,7 +243,7 @@ APP_CSS = """
 
 .code-lines {
     margin: 10px 0 12px;
-    max-height: calc(100% - 46px);
+    height: calc(100% - 46px);
     overflow: hidden;
     font: 13px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
@@ -262,7 +267,7 @@ APP_CSS = """
 }
 
 .transcript-card {
-    height: 678px;
+    height: 638px;
     overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
@@ -361,13 +366,22 @@ def log_html(log: str) -> str:
     return f"<div class='log-box'><pre>{escaped}</pre></div>"
 
 
-def code_html(title: str, code: str) -> str:
+def code_html(title: str, code: str, max_lines: int = 18) -> str:
     rows = []
-    for line_number, line in enumerate(code.splitlines() or [""], start=1):
+    lines = code.splitlines() or [""]
+    visible_lines = lines[:max_lines]
+    for line_number, line in enumerate(visible_lines, start=1):
         rows.append(
             "<div class='code-row'>"
             f"<span class='line-no'>{line_number}</span>"
             f"<span class='line-code'>{html.escape(line) or ' '}</span>"
+            "</div>"
+        )
+    if len(lines) > max_lines:
+        rows.append(
+            "<div class='code-row'>"
+            "<span class='line-no'>...</span>"
+            f"<span class='line-code'>showing first {max_lines} lines, {len(lines) - max_lines} more in the workspace</span>"
             "</div>"
         )
     return (
