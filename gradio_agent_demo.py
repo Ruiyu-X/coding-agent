@@ -176,12 +176,13 @@ APP_CSS = """
 .file-panel {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 900px;
+    min-height: 730px;
 }
 
 .log-box {
     height: 360px;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 8px;
     background: rgba(15, 23, 42, 0.42);
@@ -193,6 +194,9 @@ APP_CSS = """
     margin: 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     color: #eff6ff;
     font: 13px/1.48 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
@@ -203,7 +207,7 @@ APP_CSS = """
 
 .code-stack {
     display: grid;
-    grid-template-rows: 310px 520px;
+    grid-template-rows: 230px 430px;
     gap: 18px;
 }
 
@@ -234,6 +238,8 @@ APP_CSS = """
 
 .code-lines {
     margin: 10px 0 12px;
+    max-height: calc(100% - 46px);
+    overflow: hidden;
     font: 13px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
 
@@ -256,7 +262,7 @@ APP_CSS = """
 }
 
 .transcript-card {
-    height: 848px;
+    height: 678px;
     overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
