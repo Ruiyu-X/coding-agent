@@ -213,12 +213,12 @@ APP_CSS = """
 
 .code-stack > div {
     height: 100%;
-    overflow: hidden;
+    overflow: hidden !important;
 }
 
 .code-card {
     height: 100%;
-    overflow: hidden;
+    overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
     background: rgba(15, 23, 42, 0.42);
@@ -243,8 +243,7 @@ APP_CSS = """
 
 .code-lines {
     margin: 8px 0 10px;
-    height: calc(100% - 46px);
-    overflow: hidden;
+    min-width: max-content;
     font: 12px/1.35 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
 
@@ -261,8 +260,7 @@ APP_CSS = """
 }
 
 .line-code {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    white-space: pre;
     color: #dbeafe;
 }
 
@@ -366,22 +364,14 @@ def log_html(log: str) -> str:
     return f"<div class='log-box'><pre>{escaped}</pre></div>"
 
 
-def code_html(title: str, code: str, max_lines: int = 12) -> str:
+def code_html(title: str, code: str) -> str:
     rows = []
     lines = code.splitlines() or [""]
-    visible_lines = lines[:max_lines]
-    for line_number, line in enumerate(visible_lines, start=1):
+    for line_number, line in enumerate(lines, start=1):
         rows.append(
             "<div class='code-row'>"
             f"<span class='line-no'>{line_number}</span>"
             f"<span class='line-code'>{html.escape(line) or ' '}</span>"
-            "</div>"
-        )
-    if len(lines) > max_lines:
-        rows.append(
-            "<div class='code-row'>"
-            "<span class='line-no'>...</span>"
-            f"<span class='line-code'>showing first {max_lines} lines, {len(lines) - max_lines} more in the workspace</span>"
             "</div>"
         )
     return (
