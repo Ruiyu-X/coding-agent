@@ -30,6 +30,8 @@ Important rules:
   unique block instead.
 - When adding tests, keep them inside the test class and update imports for new
   functions.
+- After editing a Python file, use check_python_syntax before running the test
+  suite when syntax or indentation might be affected.
 - If tests or commands fail, inspect the failing file and continue fixing until
   the tests pass or max_steps is reached.
 - After adding tests, prefer discover_python_tests with expected_tests so you
@@ -51,7 +53,7 @@ class CodingAgent:
         self,
         model: ChatModel,
         toolbox: LocalToolbox,
-        max_steps: int = 20,
+        max_steps: int = 30,
         transcript_path: Path | None = None,
     ) -> None:
         self.model = model

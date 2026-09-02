@@ -20,6 +20,8 @@ OpenAI Agents SDK, or Claude Agent SDK.
   replacements.
 - Test discovery checks through `discover_python_tests`, which verifies expected
   test names were actually collected by `unittest`.
+- Python syntax checks through `check_python_syntax`, useful after edits that
+  may affect indentation or imports.
 - Unified diff review against the initial workspace snapshot.
 - JSON transcript for every run, including decisions, tool arguments, and
   observations.
@@ -53,7 +55,7 @@ For real model runs, use a larger step budget when the task includes both code
 changes and tests:
 
 ```bash
-python main.py "Add a power(a, b) function to the calculator, add tests, and verify all tests pass." --workspace demo_workspace --max-steps 20
+python main.py "Add a power(a, b) function to the calculator, add tests, and verify all tests pass." --workspace demo_workspace --max-steps 30
 ```
 
 ## Run With A Real Model

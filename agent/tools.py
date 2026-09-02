@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import difflib
 import os
 import re
@@ -36,6 +37,7 @@ class LocalToolbox:
             "append_file": self.append_file,
             "replace_in_file": self.replace_in_file,
             "run_command": self.run_command,
+            "check_python_syntax": self.check_python_syntax,
             "discover_python_tests": self.discover_python_tests,
             "diff_workspace": self.diff_workspace,
         }
@@ -58,6 +60,7 @@ class LocalToolbox:
             "- append_file(path, content): append text to a UTF-8 text file.\n"
             "- replace_in_file(path, old, new, expected_replacements=1): replace exact text.\n"
             "- run_command(command, timeout=30): run a shell command inside the workspace.\n"
+            "- check_python_syntax(path): compile a Python file and report syntax errors.\n"
             "- discover_python_tests(start_dir='.', pattern='test*.py', expected_tests=[]): "
             "run unittest discovery in verbose mode and verify expected test names appear.\n"
             "- diff_workspace(): show a unified diff against the initial workspace snapshot."
@@ -152,6 +155,14 @@ class LocalToolbox:
             f"stderr:\n{completed.stderr}"
         )
         return ToolResult(completed.returncode == 0, self._truncate(output))
+
+    def check_python_syntax(self, path: str) -> ToolResult:
+        target = self._resolve(path)
+        try:
+            ast.parse(target.read_text(encoding="utf-8"), filename=str(target))
+        except SyntaxError as exc:
+            return ToolResult(False, f"{type(exc).__name__}: {exc}")
+        return ToolResult(True, f"Syntax OK: {path}")
 
     def discover_python_tests(
         self,

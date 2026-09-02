@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=20,
+        default=30,
         help="Maximum number of model/tool iterations.",
     )
     parser.add_argument(

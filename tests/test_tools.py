@@ -104,6 +104,20 @@ class LocalToolboxTests(unittest.TestCase):
             self.assertIn("discovered_count=1", result.output)
             self.assertIn("test_sample.SampleTests.test_power", result.output)
 
+    def test_check_python_syntax_reports_indentation_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "broken.py").write_text(
+                "    def test_power(self):\n        return True\n",
+                encoding="utf-8",
+            )
+            toolbox = LocalToolbox(root)
+
+            result = toolbox.check_python_syntax("broken.py")
+
+            self.assertFalse(result.ok)
+            self.assertIn("IndentationError", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()
