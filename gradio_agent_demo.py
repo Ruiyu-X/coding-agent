@@ -170,7 +170,7 @@ APP_CSS = """
 }
 
 .control-panel, .result-panel {
-    min-height: 690px;
+    min-height: 610px;
 }
 
 .file-panel {
@@ -202,29 +202,51 @@ APP_CSS = """
     color: var(--agent-muted);
 }
 
-.control-spacer {
-    flex: 1 1 auto;
-    min-height: 14px;
-}
-
-.status-box textarea {
-    min-height: 74px !important;
-}
-
 .code-stack {
     display: grid;
     grid-template-rows: auto auto;
     gap: 16px;
 }
 
-.code-natural textarea,
-.code-natural .cm-editor {
-    min-height: 0 !important;
-    max-height: none !important;
+.code-card {
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.42);
 }
 
-.code-natural .cm-scroller {
-    overflow: visible !important;
+.code-title {
+    display: inline-flex;
+    margin: 8px 0 0 8px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.82);
+    color: #eff6ff;
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.code-lines {
+    margin: 10px 0 12px;
+    font: 13px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
+}
+
+.code-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.line-no {
+    color: #8aa0bd;
+    text-align: right;
+    padding-right: 12px;
+    user-select: none;
+}
+
+.line-code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #dbeafe;
 }
 
 .transcript-code textarea,
@@ -291,16 +313,12 @@ button.primary {
 """
 
 
-def reset_demo_workspace(workspace: str) -> tuple[str, str, str]:
+def reset_demo_workspace(workspace: str) -> tuple[str, str]:
     root = Path(workspace).resolve()
     root.mkdir(parents=True, exist_ok=True)
     (root / "calculator.py").write_text(DEMO_CALCULATOR, encoding="utf-8", newline="\n")
     (root / "test_calculator.py").write_text(DEMO_TESTS, encoding="utf-8", newline="\n")
-    return (
-        "Demo workspace reset to the initial buggy calculator project.",
-        DEMO_CALCULATOR,
-        DEMO_TESTS,
-    )
+    return code_html("calculator.py", DEMO_CALCULATOR), code_html("test_calculator.py", DEMO_TESTS)
 
 
 def read_workspace_files(workspace: str) -> tuple[str, str]:
@@ -320,6 +338,23 @@ def log_html(log: str) -> str:
         lines = [f"... showing latest {LOG_TAIL_LINES} lines, {hidden} earlier lines in transcript ..."] + lines[-LOG_TAIL_LINES:]
     escaped = html.escape("\n".join(lines) or "Waiting for agent output...")
     return f"<div class='log-box'><pre>{escaped}</pre></div>"
+
+
+def code_html(title: str, code: str) -> str:
+    rows = []
+    for line_number, line in enumerate(code.splitlines() or [""], start=1):
+        rows.append(
+            "<div class='code-row'>"
+            f"<span class='line-no'>{line_number}</span>"
+            f"<span class='line-code'>{html.escape(line) or ' '}</span>"
+            "</div>"
+        )
+    return (
+        "<div class='code-card'>"
+        f"<div class='code-title'>{html.escape(title)}</div>"
+        f"<div class='code-lines'>{''.join(rows)}</div>"
+        "</div>"
+    )
 
 
 class QueueWriter(io.StringIO):
@@ -353,7 +388,7 @@ def run_agent_stream(
     log = "Starting agent...\n"
     final_answer = ""
     calculator, tests = read_workspace_files(workspace)
-    yield "Running", "0", final_answer, log_html(log), "", calculator, tests
+    yield "Running", "0", final_answer, log_html(log), "", code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
 
     def worker() -> None:
         try:
@@ -401,7 +436,7 @@ def run_agent_stream(
             step_count += 1
         if item.startswith("[observation]") or item.startswith("[step "):
             calculator, tests = read_workspace_files(workspace)
-            yield "Running", str(step_count), final_answer, log_html(log), transcript, calculator, tests
+            yield "Running", str(step_count), final_answer, log_html(log), transcript, code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
         time.sleep(0.05)
 
     if transcript_path and transcript_path.exists():
@@ -410,7 +445,7 @@ def run_agent_stream(
 
     calculator, tests = read_workspace_files(workspace)
     state = "Completed" if final_answer and not final_answer.startswith(("RuntimeError", "ValueError")) else "Stopped"
-    yield state, str(step_count), final_answer, log_html(log), transcript, calculator, tests
+    yield state, str(step_count), final_answer, log_html(log), transcript, code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
 
 
 def build_demo(default_workspace: str) -> gr.Blocks:
@@ -445,12 +480,6 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                 with gr.Row():
                     reset_btn = gr.Button("Reset demo workspace", variant="secondary")
                     run_btn = gr.Button("Run agent", variant="primary")
-                gr.HTML("<div class='control-spacer'></div>")
-                reset_status = gr.Textbox(
-                    label="Workspace status",
-                    interactive=False,
-                    elem_classes=["status-box"],
-                )
 
             with gr.Column(scale=1, elem_classes=["panel", "result-panel"]):
                 gr.HTML("<div class='section-title'>Run Result</div>")
@@ -465,16 +494,8 @@ def build_demo(default_workspace: str) -> gr.Blocks:
             with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Workspace Files</div>")
                 with gr.Column(elem_classes=["code-stack"]):
-                    calculator_view = gr.Code(
-                        language="python",
-                        label="calculator.py",
-                        elem_classes=["code-natural"],
-                    )
-                    tests_view = gr.Code(
-                        language="python",
-                        label="test_calculator.py",
-                        elem_classes=["code-natural"],
-                    )
+                    calculator_view = gr.HTML(value=code_html("calculator.py", ""))
+                    tests_view = gr.HTML(value=code_html("test_calculator.py", ""))
             with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Run Transcript</div>")
                 transcript = gr.Code(language="json", label=".agent_runs/gradio-last-run.json", elem_classes=["transcript-code"])
@@ -482,7 +503,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
         reset_btn.click(
             fn=reset_demo_workspace,
             inputs=[workspace],
-            outputs=[reset_status, calculator_view, tests_view],
+            outputs=[calculator_view, tests_view],
         )
         run_btn.click(
             fn=run_agent_stream,
