@@ -174,7 +174,9 @@ APP_CSS = """
 }
 
 .file-panel {
-    min-height: 720px;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 828px;
 }
 
 .log-box {
@@ -204,21 +206,22 @@ APP_CSS = """
 
 .code-stack {
     display: grid;
-    grid-template-rows: auto auto;
+    grid-template-rows: 240px 520px;
     gap: 16px;
 }
 
 .code-card {
+    height: 100%;
     overflow: hidden;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
     background: rgba(15, 23, 42, 0.42);
 }
 
-.api-grid {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.75fr);
-    gap: 10px;
+.api-input,
+.api-input > div {
+    width: 100% !important;
+    max-width: none !important;
 }
 
 .code-title {
@@ -256,7 +259,7 @@ APP_CSS = """
 }
 
 .transcript-card {
-    height: 690px;
+    height: 776px;
     overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 8px;
@@ -517,13 +520,17 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                 max_steps = gr.Slider(5, 40, value=30, step=1, label="Max steps")
                 use_mock = gr.Checkbox(value=True, label="Use deterministic mock model")
                 save_transcript = gr.Checkbox(value=True, label="Save JSON transcript")
-                with gr.Row(elem_classes=["api-grid"]):
-                    api_key = gr.Textbox(
-                        label="OpenAI API key",
-                        type="password",
-                        placeholder="Used only when mock mode is off",
-                    )
-                    model_name = gr.Textbox(value="gpt-4o-mini", label="Model")
+                api_key = gr.Textbox(
+                    label="OpenAI API key",
+                    type="password",
+                    placeholder="Used only when mock mode is off",
+                    elem_classes=["api-input"],
+                )
+                model_name = gr.Textbox(
+                    value="gpt-4o-mini",
+                    label="Model",
+                    elem_classes=["api-input"],
+                )
                 with gr.Row():
                     reset_btn = gr.Button("Reset demo workspace", variant="secondary")
                     run_btn = gr.Button("Run agent", variant="primary")
