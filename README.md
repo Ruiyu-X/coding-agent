@@ -35,6 +35,12 @@ OpenAI Agents SDK, or Claude Agent SDK.
 
 No third-party Python package is required.
 
+The optional Gradio frontend requires:
+
+```bash
+pip install -r requirements-frontend.txt
+```
+
 ## Quick Start
 
 Run the built-in deterministic demo:
@@ -50,6 +56,14 @@ python -m unittest discover -s tests
 ```
 
 On Windows, use `py` instead of `python` if `python` is not in PATH.
+
+Run the optional web demo:
+
+```bash
+python gradio_agent_demo.py
+```
+
+Then open `http://127.0.0.1:7860`.
 
 For real model runs, use a larger step budget when the task includes both code
 changes and tests:
@@ -128,3 +142,10 @@ intentional arithmetic bugs. The mock demo shows the agent summarizing the
 workspace, inspecting files, fixing `add` and `subtract`, adding a guarded
 `divide` function, extending tests, running `unittest`, reviewing the diff, and
 reporting completion.
+
+## Optional Frontend
+
+`gradio_agent_demo.py` provides a small web interface for demonstrations. It is
+only a UI wrapper around the same `CodingAgent` runtime. The frontend can reset
+the demo workspace, run the agent in mock or real-model mode, show the run log,
+display the final files, and inspect the JSON transcript.
