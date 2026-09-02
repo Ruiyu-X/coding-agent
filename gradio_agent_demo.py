@@ -215,6 +215,12 @@ APP_CSS = """
     background: rgba(15, 23, 42, 0.42);
 }
 
+.api-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.75fr);
+    gap: 10px;
+}
+
 .code-title {
     display: inline-flex;
     margin: 8px 0 0 8px;
@@ -249,12 +255,21 @@ APP_CSS = """
     color: #dbeafe;
 }
 
-.transcript-code textarea,
-.transcript-code .cm-editor,
-.transcript-code .cm-scroller {
-    min-height: 628px !important;
-    max-height: 628px !important;
-    overflow: auto !important;
+.transcript-card {
+    height: 690px;
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.42);
+}
+
+.transcript-card pre {
+    min-width: max-content;
+    margin: 0;
+    padding: 12px 14px;
+    white-space: pre;
+    color: #dbeafe;
+    font: 13px/1.48 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
 }
 
 .compact-output textarea {
@@ -357,6 +372,16 @@ def code_html(title: str, code: str) -> str:
     )
 
 
+def transcript_html(title: str, content: str) -> str:
+    escaped = html.escape(content or "Transcript will appear here after a saved run.")
+    return (
+        "<div class='transcript-card'>"
+        f"<div class='code-title'>{html.escape(title)}</div>"
+        f"<pre>{escaped}</pre>"
+        "</div>"
+    )
+
+
 class QueueWriter(io.StringIO):
     def __init__(self, updates: "queue.Queue[str]") -> None:
         super().__init__()
@@ -382,17 +407,32 @@ def run_agent_stream(
     max_steps: int,
     use_mock: bool,
     save_transcript: bool,
+    api_key: str,
+    model_name: str,
 ) -> Iterator[tuple[str, str, str, str, str, str, str]]:
     transcript_path = Path(".agent_runs/gradio-last-run.json") if save_transcript else None
     updates: queue.Queue[str | tuple[str, str | None]] = queue.Queue()
     log = "Starting agent...\n"
     final_answer = ""
     calculator, tests = read_workspace_files(workspace)
-    yield "Running", "0", final_answer, log_html(log), "", code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
+    yield "Running", "0", final_answer, log_html(log), transcript_html(".agent_runs/gradio-last-run.json", ""), code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
 
     def worker() -> None:
         try:
-            model = MockModelClient() if use_mock else OpenAICompatibleClient.from_env()
+            if use_mock:
+                model = MockModelClient()
+            else:
+                key = (api_key or os.getenv("OPENAI_API_KEY") or "").strip()
+                if not key:
+                    raise RuntimeError(
+                        "OPENAI_API_KEY is not set. Paste an API key here or enable mock mode."
+                    )
+                model = OpenAICompatibleClient(
+                    api_key=key,
+                    model=(model_name or os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip(),
+                    base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+                    temperature=float(os.getenv("OPENAI_TEMPERATURE", "0")),
+                )
             toolbox = LocalToolbox(Path(workspace).resolve())
             agent = CodingAgent(
                 model=model,
@@ -436,7 +476,7 @@ def run_agent_stream(
             step_count += 1
         if item.startswith("[observation]") or item.startswith("[step "):
             calculator, tests = read_workspace_files(workspace)
-            yield "Running", str(step_count), final_answer, log_html(log), transcript, code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
+            yield "Running", str(step_count), final_answer, log_html(log), transcript_html(".agent_runs/gradio-last-run.json", transcript), code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
         time.sleep(0.05)
 
     if transcript_path and transcript_path.exists():
@@ -445,7 +485,7 @@ def run_agent_stream(
 
     calculator, tests = read_workspace_files(workspace)
     state = "Completed" if final_answer and not final_answer.startswith(("RuntimeError", "ValueError")) else "Stopped"
-    yield state, str(step_count), final_answer, log_html(log), transcript, code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
+    yield state, str(step_count), final_answer, log_html(log), transcript_html(".agent_runs/gradio-last-run.json", transcript), code_html("calculator.py", calculator), code_html("test_calculator.py", tests)
 
 
 def build_demo(default_workspace: str) -> gr.Blocks:
@@ -477,6 +517,13 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                 max_steps = gr.Slider(5, 40, value=30, step=1, label="Max steps")
                 use_mock = gr.Checkbox(value=True, label="Use deterministic mock model")
                 save_transcript = gr.Checkbox(value=True, label="Save JSON transcript")
+                with gr.Row(elem_classes=["api-grid"]):
+                    api_key = gr.Textbox(
+                        label="OpenAI API key",
+                        type="password",
+                        placeholder="Used only when mock mode is off",
+                    )
+                    model_name = gr.Textbox(value="gpt-4o-mini", label="Model")
                 with gr.Row():
                     reset_btn = gr.Button("Reset demo workspace", variant="secondary")
                     run_btn = gr.Button("Run agent", variant="primary")
@@ -498,7 +545,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                     tests_view = gr.HTML(value=code_html("test_calculator.py", ""))
             with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Run Transcript</div>")
-                transcript = gr.Code(language="json", label=".agent_runs/gradio-last-run.json", elem_classes=["transcript-code"])
+                transcript = gr.HTML(value=transcript_html(".agent_runs/gradio-last-run.json", ""))
 
         reset_btn.click(
             fn=reset_demo_workspace,
@@ -507,7 +554,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
         )
         run_btn.click(
             fn=run_agent_stream,
-            inputs=[task, workspace, max_steps, use_mock, save_transcript],
+            inputs=[task, workspace, max_steps, use_mock, save_transcript, api_key, model_name],
             outputs=[run_state, step_count, final_answer, run_log, transcript, calculator_view, tests_view],
         )
 
