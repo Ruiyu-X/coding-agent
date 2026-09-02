@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import html
 import io
 import json
 import os
@@ -9,6 +10,7 @@ import queue
 import threading
 import time
 from pathlib import Path
+from typing import Iterator
 
 import gradio as gr
 
@@ -23,6 +25,8 @@ DEFAULT_TASK = (
     "Fix the calculator implementation, add safe divide, extend tests, "
     "and verify everything."
 )
+
+LOG_TAIL_LINES = 90
 
 DEMO_CALCULATOR = """def add(a, b):
     return a - b
@@ -138,16 +142,18 @@ APP_CSS = """
     display: grid;
     grid-template-columns: minmax(360px, 0.86fr) minmax(520px, 1.14fr);
     gap: 18px;
-    align-items: start;
+    align-items: stretch;
 }
 
 .file-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 18px;
+    align-items: stretch;
 }
 
 .panel {
+    height: 100%;
     border: 1px solid var(--agent-line) !important;
     border-radius: 8px !important;
     background:
@@ -155,6 +161,59 @@ APP_CSS = """
         var(--agent-panel) !important;
     box-shadow: 0 18px 52px rgba(0, 0, 0, 0.24);
     padding: 16px !important;
+}
+
+.control-panel, .result-panel {
+    min-height: 760px;
+}
+
+.file-panel {
+    min-height: 760px;
+}
+
+.log-box {
+    height: 520px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.42);
+    padding: 12px 14px;
+}
+
+.log-box pre {
+    height: 100%;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    color: #eff6ff;
+    font: 13px/1.48 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
+}
+
+.log-muted {
+    color: var(--agent-muted);
+}
+
+.tall-code textarea,
+.tall-code .cm-editor,
+.tall-code .cm-scroller {
+    min-height: 300px !important;
+    max-height: 300px !important;
+    overflow: auto !important;
+}
+
+.transcript-code textarea,
+.transcript-code .cm-editor,
+.transcript-code .cm-scroller {
+    min-height: 668px !important;
+    max-height: 668px !important;
+    overflow: auto !important;
+}
+
+.compact-output textarea {
+    min-height: 76px !important;
 }
 
 .section-title {
@@ -231,6 +290,15 @@ def read_workspace_files(workspace: str) -> tuple[str, str]:
     )
 
 
+def log_html(log: str) -> str:
+    lines = log.splitlines()
+    if len(lines) > LOG_TAIL_LINES:
+        hidden = len(lines) - LOG_TAIL_LINES
+        lines = [f"... showing latest {LOG_TAIL_LINES} lines, {hidden} earlier lines in transcript ..."] + lines[-LOG_TAIL_LINES:]
+    escaped = html.escape("\n".join(lines) or "Waiting for agent output...")
+    return f"<div class='log-box'><pre>{escaped}</pre></div>"
+
+
 class QueueWriter(io.StringIO):
     def __init__(self, updates: "queue.Queue[str]") -> None:
         super().__init__()
@@ -256,13 +324,13 @@ def run_agent_stream(
     max_steps: int,
     use_mock: bool,
     save_transcript: bool,
-) -> tuple[str, str, str, str, str, str]:
+) -> Iterator[tuple[str, str, str, str, str, str, str]]:
     transcript_path = Path(".agent_runs/gradio-last-run.json") if save_transcript else None
     updates: queue.Queue[str | tuple[str, str | None]] = queue.Queue()
     log = "Starting agent...\n"
     final_answer = ""
     calculator, tests = read_workspace_files(workspace)
-    yield "Running", "0", final_answer, log, "", calculator, tests
+    yield "Running", "0", final_answer, log_html(log), "", calculator, tests
 
     def worker() -> None:
         try:
@@ -310,7 +378,7 @@ def run_agent_stream(
             step_count += 1
         if item.startswith("[observation]") or item.startswith("[step "):
             calculator, tests = read_workspace_files(workspace)
-            yield "Running", str(step_count), final_answer, log, transcript, calculator, tests
+            yield "Running", str(step_count), final_answer, log_html(log), transcript, calculator, tests
         time.sleep(0.05)
 
     if transcript_path and transcript_path.exists():
@@ -319,7 +387,7 @@ def run_agent_stream(
 
     calculator, tests = read_workspace_files(workspace)
     state = "Completed" if final_answer and not final_answer.startswith(("RuntimeError", "ValueError")) else "Stopped"
-    yield state, str(step_count), final_answer, log, transcript, calculator, tests
+    yield state, str(step_count), final_answer, log_html(log), transcript, calculator, tests
 
 
 def build_demo(default_workspace: str) -> gr.Blocks:
@@ -344,7 +412,7 @@ def build_demo(default_workspace: str) -> gr.Blocks:
         )
 
         with gr.Row(elem_classes=["main-wrap", "dashboard-grid"]):
-            with gr.Column(scale=1, elem_classes=["panel"]):
+            with gr.Column(scale=1, elem_classes=["panel", "control-panel"]):
                 gr.HTML("<div class='section-title'>Task Control</div>")
                 task = gr.Textbox(value=DEFAULT_TASK, lines=4, label="Programming task")
                 workspace = gr.Textbox(value=default_workspace, label="Workspace")
@@ -356,22 +424,23 @@ def build_demo(default_workspace: str) -> gr.Blocks:
                     run_btn = gr.Button("Run agent", variant="primary")
                 reset_status = gr.Textbox(label="Workspace status", interactive=False)
 
-            with gr.Column(scale=1, elem_classes=["panel"]):
+            with gr.Column(scale=1, elem_classes=["panel", "result-panel"]):
                 gr.HTML("<div class='section-title'>Run Result</div>")
                 with gr.Row():
                     run_state = gr.Textbox(value="Idle", label="State", interactive=False)
                     step_count = gr.Textbox(value="0", label="Observed steps", interactive=False)
-                final_answer = gr.Textbox(label="Final answer", lines=3)
-                run_log = gr.Textbox(label="Agent log", lines=20)
+                final_answer = gr.Textbox(label="Final answer", lines=3, elem_classes=["compact-output"])
+                gr.HTML("<div class='section-title'>Agent log</div>")
+                run_log = gr.HTML(value=log_html(""))
 
         with gr.Row(elem_classes=["main-wrap", "file-grid"]):
-            with gr.Column(elem_classes=["panel"]):
+            with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Workspace Files</div>")
-                calculator_view = gr.Code(language="python", label="calculator.py")
-                tests_view = gr.Code(language="python", label="test_calculator.py")
-            with gr.Column(elem_classes=["panel"]):
+                calculator_view = gr.Code(language="python", label="calculator.py", elem_classes=["tall-code"])
+                tests_view = gr.Code(language="python", label="test_calculator.py", elem_classes=["tall-code"])
+            with gr.Column(elem_classes=["panel", "file-panel"]):
                 gr.HTML("<div class='section-title'>Run Transcript</div>")
-                transcript = gr.Code(language="json", label=".agent_runs/gradio-last-run.json")
+                transcript = gr.Code(language="json", label=".agent_runs/gradio-last-run.json", elem_classes=["transcript-code"])
 
         reset_btn.click(
             fn=reset_demo_workspace,
