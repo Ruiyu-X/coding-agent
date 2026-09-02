@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 
 import gradio as gr
@@ -12,6 +13,8 @@ from agent.core import CodingAgent
 from agent.model_client import MockModelClient, OpenAICompatibleClient
 from agent.tools import LocalToolbox
 
+
+LOCAL_NO_PROXY = "127.0.0.1,localhost,::1"
 
 DEFAULT_TASK = (
     "Fix the calculator implementation, add safe divide, extend tests, "
@@ -189,12 +192,6 @@ def run_agent(
 def build_demo(default_workspace: str) -> gr.Blocks:
     with gr.Blocks(
         title="Coding Agent Demo",
-        theme=gr.themes.Soft(
-            primary_hue="blue",
-            secondary_hue="emerald",
-            neutral_hue="slate",
-        ),
-        css=APP_CSS,
     ) as demo:
         gr.HTML(
             """
@@ -267,13 +264,29 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    os.environ["NO_PROXY"] = _merge_no_proxy(os.environ.get("NO_PROXY"))
+    os.environ["no_proxy"] = _merge_no_proxy(os.environ.get("no_proxy"))
     args = parse_args()
     demo = build_demo(args.workspace)
     demo.queue().launch(
         server_name=args.server_name,
         server_port=args.server_port,
         share=args.share,
+        theme=gr.themes.Soft(
+            primary_hue="blue",
+            secondary_hue="emerald",
+            neutral_hue="slate",
+        ),
+        css=APP_CSS,
     )
+
+
+def _merge_no_proxy(existing: str | None) -> str:
+    entries = [entry.strip() for entry in (existing or "").split(",") if entry.strip()]
+    for entry in LOCAL_NO_PROXY.split(","):
+        if entry not in entries:
+            entries.append(entry)
+    return ",".join(entries)
 
 
 if __name__ == "__main__":
