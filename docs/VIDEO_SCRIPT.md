@@ -28,10 +28,10 @@ Keep the recording under two minutes.
 This project is a lightweight coding agent runtime. It does not train a large
 language model and does not wrap an existing agent product. Instead, it calls an
 OpenAI-compatible chat model and implements the agent loop by itself. The model
-returns JSON actions, and my program parses those actions, runs local tools,
+returns JSON actions, and the runtime parses those actions, runs local tools,
 feeds observations back to the model, and stops when the task is complete or a
 step limit is reached. The local tools can inspect the workspace, read and edit
 files, run commands, check Python syntax, verify discovered unit tests, and show
-a diff of the final changes. I also record each run as a JSON transcript, so the
+a diff of the final changes. Each run is recorded as a JSON transcript, so the
 decision process is auditable. The demo shows the agent fixing a small Python
 project, adding tests, running them, and verifying the final result.

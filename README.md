@@ -84,7 +84,7 @@ set OPENAI_MODEL=gpt-4o-mini
 For an OpenAI-compatible gateway, also set:
 
 ```bash
-set OPENAI_BASE_URL=https://your-compatible-endpoint/v1
+set OPENAI_BASE_URL=https://compatible-endpoint.example/v1
 ```
 
 Then run:
@@ -132,7 +132,7 @@ Git and can be inspected locally to see every model decision, tool call, and
 tool result. Disable it with:
 
 ```bash
-python main.py "your task" --transcript none
+python main.py "example task" --transcript none
 ```
 
 ## Demo Task
